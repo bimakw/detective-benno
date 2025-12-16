@@ -9,7 +9,7 @@ description = "An intelligent code review detective powered by LLM - solving cod
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
-    { name = "Bima Kharisma Wicaksana", email = "bimakw@example.com" }
+    { name = "Bima Kharisma Wicaksana", email = "bimakw@users.noreply.github.com" }
 ]
 keywords = [
     "code-review",
