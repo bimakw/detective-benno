@@ -1,0 +1,16 @@
+Detective Benno
+Copyright 2024 Bima Kharisma Wicaksana
+
+This product includes software developed by Bima Kharisma Wicaksana.
+
+Licensed under the Apache License, Version 2.0.
+
+Third-party dependencies:
+- OpenAI Python SDK (MIT License)
+- Click (BSD-3-Clause License)
+- Rich (MIT License)
+- Pydantic (MIT License)
+- PyYAML (MIT License)
+- GitPython (BSD-3-Clause License)
+- Pygments (BSD-2-Clause License)
+- HTTPX (BSD-3-Clause License)

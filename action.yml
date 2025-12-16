@@ -1,0 +1,144 @@
+name: 'Detective Benno'
+description: 'AI-powered code review detective that investigates your pull requests'
+author: 'Bima Kharisma Wicaksana'
+
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  openai_api_key:
+    description: 'OpenAI API key for powering the investigation'
+    required: true
+  github_token:
+    description: 'GitHub token for posting review comments'
+    required: true
+  investigation_level:
+    description: 'Level of investigation detail (minimal, standard, detailed)'
+    required: false
+    default: 'standard'
+  max_findings:
+    description: 'Maximum number of findings to report'
+    required: false
+    default: '10'
+  model:
+    description: 'OpenAI model to use'
+    required: false
+    default: 'gpt-4o'
+  config_file:
+    description: 'Path to custom config file'
+    required: false
+    default: ''
+  fail_on_critical:
+    description: 'Fail the action if critical issues are found'
+    required: false
+    default: 'true'
+
+outputs:
+  findings_count:
+    description: 'Total number of findings'
+  critical_count:
+    description: 'Number of critical findings'
+  warning_count:
+    description: 'Number of warnings'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Detective Benno
+      shell: bash
+      run: pip install detective-benno
+
+    - name: Get changed files
+      id: changed-files
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          git fetch origin ${{ github.base_ref }} --depth=1
+          echo "files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        else
+          echo "files=$(git diff --name-only HEAD~1 | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run Detective Benno Investigation
+      id: investigate
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        CONFIG_ARG=""
+        if [ -n "${{ inputs.config_file }}" ]; then
+          CONFIG_ARG="--config ${{ inputs.config_file }}"
+        fi
+
+        benno ${{ steps.changed-files.outputs.files }} \
+          --level ${{ inputs.investigation_level }} \
+          --json $CONFIG_ARG > investigation_report.json 2>&1 || true
+
+        # Parse results
+        FINDINGS=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(len(d.get('comments', [])))" 2>/dev/null || echo "0")
+        CRITICAL=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'critical'))" 2>/dev/null || echo "0")
+        WARNINGS=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'warning'))" 2>/dev/null || echo "0")
+
+        echo "findings_count=$FINDINGS" >> $GITHUB_OUTPUT
+        echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+        echo "warning_count=$WARNINGS" >> $GITHUB_OUTPUT
+
+    - name: Post PR Comment
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        if [ -f investigation_report.json ]; then
+          python << 'EOF'
+        import json
+        import os
+        import subprocess
+
+        with open('investigation_report.json') as f:
+            report = json.load(f)
+
+        comments = report.get('comments', [])
+        if not comments:
+            body = "## Detective Benno Investigation Report\n\nCase closed - No issues found!"
+        else:
+            critical = sum(1 for c in comments if c.get('severity') == 'critical')
+            warnings = sum(1 for c in comments if c.get('severity') == 'warning')
+            suggestions = sum(1 for c in comments if c.get('severity') == 'suggestion')
+
+            body = f"""## Detective Benno Investigation Report
+
+        **Files Investigated:** {report.get('files_reviewed', 0)}
+        **Findings:** {len(comments)} ({critical} critical, {warnings} warnings, {suggestions} suggestions)
+
+        """
+            for c in comments[:10]:
+                severity_icon = {'critical': '🚨', 'warning': '⚠️', 'suggestion': '💡'}.get(c['severity'], 'ℹ️')
+                body += f"\n### {severity_icon} {c['file_path']}:{c.get('line_start', '?')}\n"
+                body += f"**{c['severity'].upper()}** ({c.get('category', 'general')})\n\n"
+                body += f"{c['message']}\n"
+                if c.get('suggestion'):
+                    body += f"\n**Recommendation:** {c['suggestion']}\n"
+
+        # Post comment using gh cli
+        pr_number = os.environ.get('GITHUB_REF', '').split('/')[-2]
+        subprocess.run(['gh', 'pr', 'comment', pr_number, '--body', body], check=True)
+        EOF
+        fi
+
+    - name: Check for critical issues
+      if: inputs.fail_on_critical == 'true'
+      shell: bash
+      run: |
+        CRITICAL=${{ steps.investigate.outputs.critical_count }}
+        if [ "$CRITICAL" -gt 0 ]; then
+          echo "::error::Detective Benno found $CRITICAL critical issue(s)"
+          exit 1
+        fi
