@@ -1,6 +1,5 @@
 """Tests for data models."""
 
-import pytest
 
 from detective_benno.models import (
     FileChange,

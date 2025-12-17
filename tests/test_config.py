@@ -3,9 +3,7 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from detective_benno.config import load_config, _load_from_file
+from detective_benno.config import load_config
 
 
 class TestLoadConfig:

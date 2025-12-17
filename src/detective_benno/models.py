@@ -1,7 +1,6 @@
 """Data models for Detective Benno."""
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,13 +19,13 @@ class ReviewComment(BaseModel):
 
     file_path: str = Field(..., description="Path to the file being investigated")
     line_start: int = Field(..., description="Starting line number")
-    line_end: Optional[int] = Field(None, description="Ending line number")
+    line_end: int | None = Field(None, description="Ending line number")
     severity: Severity = Field(..., description="Severity level of the finding")
     category: str = Field(..., description="Category (security, performance, etc.)")
     message: str = Field(..., description="Description of the finding")
-    suggestion: Optional[str] = Field(None, description="Suggested fix or improvement")
-    code_snippet: Optional[str] = Field(None, description="Relevant code snippet")
-    suggested_code: Optional[str] = Field(None, description="Suggested replacement code")
+    suggestion: str | None = Field(None, description="Suggested fix or improvement")
+    code_snippet: str | None = Field(None, description="Relevant code snippet")
+    suggested_code: str | None = Field(None, description="Suggested replacement code")
 
     @property
     def line_range(self) -> str:
@@ -41,7 +40,7 @@ class ReviewResult(BaseModel):
 
     files_reviewed: int = Field(default=0, description="Number of files investigated")
     comments: list[ReviewComment] = Field(default_factory=list)
-    summary: Optional[str] = Field(None, description="Overall investigation summary")
+    summary: str | None = Field(None, description="Overall investigation summary")
     model_used: str = Field(default="gpt-4o", description="Model used for investigation")
     tokens_used: int = Field(default=0, description="Total tokens consumed")
 
@@ -70,9 +69,9 @@ class FileChange(BaseModel):
     """Represents a changed file in a diff."""
 
     path: str = Field(..., description="File path")
-    content: Optional[str] = Field(None, description="Full file content")
-    diff: Optional[str] = Field(None, description="Diff content")
-    language: Optional[str] = Field(None, description="Programming language")
+    content: str | None = Field(None, description="Full file content")
+    diff: str | None = Field(None, description="Diff content")
+    language: str | None = Field(None, description="Programming language")
     added_lines: list[int] = Field(default_factory=list)
     removed_lines: list[int] = Field(default_factory=list)
 

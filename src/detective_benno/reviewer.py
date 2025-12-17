@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from openai import OpenAI
 
@@ -21,8 +20,8 @@ class CodeReviewer:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        config: Optional[ReviewConfig] = None,
+        api_key: str | None = None,
+        config: ReviewConfig | None = None,
     ) -> None:
         """Initialize the code investigator.
 
@@ -72,7 +71,7 @@ class CodeReviewer:
         files = self._parse_diff(diff)
         return self.review_files(files)
 
-    def review_file(self, path: str, content: Optional[str] = None) -> ReviewResult:
+    def review_file(self, path: str, content: str | None = None) -> ReviewResult:
         """Investigate a single file.
 
         Args:

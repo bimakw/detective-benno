@@ -2,14 +2,13 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
 from detective_benno.models import ReviewConfig
 
 
-def load_config(config_path: Optional[str] = None) -> ReviewConfig:
+def load_config(config_path: str | None = None) -> ReviewConfig:
     """Load configuration from file or defaults.
 
     Args:

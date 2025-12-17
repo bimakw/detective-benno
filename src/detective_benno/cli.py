@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -15,11 +14,11 @@ from detective_benno.reviewer import CodeReviewer
 
 console = Console()
 
-BANNER = """
+BANNER = r"""
 [bold cyan]
     ____       __            __  _            ____
    / __ \___  / /____  _____/ /_(_)   _____  / __ )___  ____  ____  ____
-  / / / / _ \/ __/ _ \/ ___/ __/ / | / / _ \/ __  / _ \/ __ \/ __ \/ __ \\
+  / / / / _ \/ __/ _ \/ ___/ __/ / | / / _ \/ __  / _ \/ __ \/ __ \/ __ \
  / /_/ /  __/ /_/  __/ /__/ /_/ /| |/ /  __/ /_/ /  __/ / / / / / / /_/ /
 /_____/\___/\__/\___/\___/\__/_/ |___/\___/_____/\___/_/ /_/_/ /_/\____/
 [/bold cyan]
@@ -55,7 +54,7 @@ def main(
     ctx: click.Context,
     staged: bool,
     diff: bool,
-    config: Optional[str],
+    config: str | None,
     level: str,
     output_json: bool,
     quiet: bool,
