@@ -1,9 +1,11 @@
-# 🔍 Detective Benno
+# Detective Benno
 
 [![Python Version](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20Models-000000?style=flat&logo=llama&logoColor=white)](https://ollama.ai/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](https://github.com/bimakw/detective-benno)
 
 > *"Every line of code tells a story. I find the plot holes."* - Detective Benno
 
@@ -11,7 +13,9 @@ An intelligent code review detective powered by LLM that investigates your pull 
 
 ## Features
 
+- **Multi-LLM Provider Support** - Use OpenAI or local models via Ollama (codellama, deepseek-coder, mistral)
 - **Automated PR Investigation** - Automatically triggered on pull request events
+- **Inline PR Comments** - Posts findings directly on relevant code lines
 - **Multi-language Support** - Investigates Python, Go, JavaScript, TypeScript, Rust, and more
 - **Configurable Rules** - Define custom investigation guidelines per repository
 - **GitHub Action** - Easy integration with existing CI/CD pipelines
@@ -29,17 +33,46 @@ pip install detective-benno
 ### CLI Usage
 
 ```bash
-# Investigate staged changes
-benno investigate --staged
-
 # Investigate specific files
 benno investigate src/main.py src/utils.py
 
-# Investigate a git diff
-git diff main..feature | benno investigate --diff
+# Investigate staged changes
+benno staged
+
+# Investigate a git diff (pipe to stdin)
+git diff main..feature | benno diff
 
 # Investigate with custom guidelines
-benno investigate --config .benno.yaml
+benno investigate --config .benno.yaml src/
+
+# Use Ollama for local models (free!)
+benno investigate --provider ollama --model codellama src/main.py
+
+# Initialize config file
+benno init
+```
+
+### Using Different Providers
+
+#### OpenAI (Default)
+```bash
+export OPENAI_API_KEY=your-api-key
+benno investigate src/main.py
+```
+
+#### Ollama (Local Models - Free!)
+First, install and start Ollama:
+```bash
+# Install Ollama (https://ollama.ai)
+ollama pull codellama  # or deepseek-coder, mistral
+```
+
+Then use it with Detective Benno:
+```bash
+benno investigate --provider ollama --model codellama src/main.py
+
+# Or set defaults in config
+benno init  # Creates .benno.yaml
 ```
 
 ### GitHub Action
@@ -68,9 +101,27 @@ jobs:
       - name: Detective Benno Investigation
         uses: bimakw/detective-benno@v1
         with:
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           investigation_level: detailed  # minimal, standard, detailed
+          post_inline_comments: true      # Post comments on code lines
+          post_summary_comment: true      # Post summary comment
+```
+
+#### Using Ollama in GitHub Actions
+
+```yaml
+- name: Start Ollama
+  run: |
+    curl -fsSL https://ollama.ai/install.sh | sh
+    ollama pull codellama &
+
+- name: Detective Benno Investigation
+  uses: bimakw/detective-benno@v1
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: ollama
+    model: codellama
 ```
 
 ## Configuration
@@ -80,6 +131,12 @@ Create `.benno.yaml` in your repository root:
 ```yaml
 # Detective Benno Configuration
 version: "1"
+
+# Provider settings
+provider:
+  name: openai         # openai or ollama
+  model: gpt-4o        # gpt-4o, gpt-4o-mini, codellama, mistral, etc.
+  base_url: null       # For Ollama: http://localhost:11434
 
 # Investigation settings
 investigation:
@@ -110,12 +167,6 @@ ignore:
     - "node_modules/**"
   patterns:
     - "TODO:"  # Don't flag TODOs
-
-# Model settings
-model:
-  provider: openai
-  name: gpt-4o
-  temperature: 0.3
 ```
 
 ## Investigation Categories
@@ -169,7 +220,8 @@ Case Status: REQUIRES ATTENTION
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | Your OpenAI API key |
+| `OPENAI_API_KEY` | For OpenAI | Your OpenAI API key |
+| `OLLAMA_HOST` | No | Ollama server URL (default: http://localhost:11434) |
 | `GITHUB_TOKEN` | For PR investigations | GitHub token with PR write access |
 | `BENNO_CONFIG` | No | Path to custom config file |
 
@@ -191,9 +243,36 @@ pip install -e ".[dev]"
 # Run tests
 pytest
 
+# Run tests with coverage
+pytest --cov=src/detective_benno --cov-report=term-missing
+
 # Run linting
 ruff check .
 mypy src/
+```
+
+## Project Structure
+
+```
+detective-benno/
+├── src/detective_benno/
+│   ├── __init__.py
+│   ├── cli.py                # CLI commands
+│   ├── config.py             # Configuration loading
+│   ├── models.py             # Pydantic models
+│   ├── prompts.py            # LLM prompts
+│   ├── reviewer.py           # Core review logic
+│   ├── providers/            # LLM providers
+│   │   ├── base.py           # Abstract provider
+│   │   ├── openai.py         # OpenAI implementation
+│   │   ├── ollama.py         # Ollama implementation
+│   │   └── factory.py        # Provider factory
+│   └── github/               # GitHub integration
+│       ├── api.py            # GitHub API wrapper
+│       └── inline_comments.py # PR inline comments
+├── tests/                    # Test suite (87% coverage)
+├── action.yml                # GitHub Action definition
+└── pyproject.toml
 ```
 
 ## Why "Detective Benno"?
@@ -217,6 +296,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Acknowledgments
 
 - OpenAI for GPT-4 API
+- Ollama for local LLM support
 - GitHub Actions for CI/CD integration
 - The open source community
 

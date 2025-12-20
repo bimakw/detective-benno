@@ -3,7 +3,7 @@
 Every line of code tells a story. I find the plot holes.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Bima Kharisma Wicaksana"
 
 from detective_benno.models import ReviewComment, ReviewResult, Severity

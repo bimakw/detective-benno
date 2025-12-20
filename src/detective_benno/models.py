@@ -76,6 +76,27 @@ class FileChange(BaseModel):
     removed_lines: list[int] = Field(default_factory=list)
 
 
+class ProviderConfig(BaseModel):
+    """LLM provider configuration."""
+
+    name: str = Field(default="openai", description="Provider name (openai, ollama)")
+    model: str | None = Field(default=None, description="Model to use (provider-specific)")
+    api_key: str | None = Field(default=None, description="API key (falls back to env var)")
+    base_url: str | None = Field(default=None, description="Custom API base URL")
+    temperature: float = Field(default=0.3, description="Model temperature")
+
+    @property
+    def effective_model(self) -> str:
+        """Get effective model name with provider defaults."""
+        if self.model:
+            return self.model
+        defaults = {
+            "openai": "gpt-4o",
+            "ollama": "codellama",
+        }
+        return defaults.get(self.name, "gpt-4o")
+
+
 class ReviewConfig(BaseModel):
     """Configuration for code investigation."""
 
@@ -84,5 +105,8 @@ class ReviewConfig(BaseModel):
     guidelines: list[str] = Field(default_factory=list, description="Custom guidelines")
     ignore_files: list[str] = Field(default_factory=list, description="Files to ignore")
     ignore_patterns: list[str] = Field(default_factory=list, description="Patterns to ignore")
-    model: str = Field(default="gpt-4o", description="Model to use")
-    temperature: float = Field(default=0.3, description="Model temperature")
+    provider: ProviderConfig = Field(default_factory=ProviderConfig, description="LLM provider config")
+
+    # Legacy fields for backward compatibility
+    model: str = Field(default="gpt-4o", description="Model to use (deprecated, use provider.model)")
+    temperature: float = Field(default=0.3, description="Model temperature (deprecated, use provider.temperature)")
