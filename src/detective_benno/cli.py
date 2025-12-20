@@ -26,91 +26,174 @@ BANNER = r"""
 """
 
 
-@click.group(invoke_without_command=True)
-@click.option(
-    "--staged", is_flag=True, help="Investigate staged git changes"
-)
-@click.option(
-    "--diff", is_flag=True, help="Read diff from stdin"
-)
-@click.option(
-    "--config", "-c", type=click.Path(exists=True), help="Path to config file"
-)
-@click.option(
-    "--level",
-    type=click.Choice(["minimal", "standard", "detailed"]),
-    default="standard",
-    help="Investigation detail level",
-)
-@click.option(
-    "--json", "output_json", is_flag=True, help="Output as JSON"
-)
-@click.option(
-    "--quiet", "-q", is_flag=True, help="Suppress banner"
-)
-@click.argument("files", nargs=-1, type=click.Path(exists=True))
-@click.pass_context
-def main(
-    ctx: click.Context,
-    staged: bool,
-    diff: bool,
-    config: str | None,
-    level: str,
-    output_json: bool,
-    quiet: bool,
-    files: tuple[str, ...],
-) -> None:
+# Common options for review commands
+def common_options(f):
+    """Decorator for common review options."""
+    f = click.option("--config", "-c", type=click.Path(exists=True), help="Path to config file")(f)
+    f = click.option("--provider", "-p", type=click.Choice(["openai", "ollama"]),
+                     help="LLM provider to use (overrides config)")(f)
+    f = click.option("--model", "-m", help="Model to use (e.g., gpt-4o, codellama)")(f)
+    f = click.option("--level", type=click.Choice(["minimal", "standard", "detailed"]),
+                     default="standard", help="Investigation detail level")(f)
+    f = click.option("--json", "output_json", is_flag=True, help="Output as JSON")(f)
+    f = click.option("--quiet", "-q", is_flag=True, help="Suppress banner")(f)
+    return f
+
+
+def _setup_reviewer(config_path, provider, model, level, quiet, output_json) -> tuple[CodeReviewer, bool, bool]:
+    """Setup reviewer with config, return (reviewer, quiet, output_json)."""
+    review_config = load_config(config_path)
+    review_config.level = level
+
+    # Override provider settings from CLI flags
+    if provider:
+        review_config.provider.name = provider
+    if model:
+        review_config.provider.model = model
+        review_config.model = model
+
+    # Show provider info
+    if not quiet and not output_json:
+        console.print(BANNER)
+        provider_name = review_config.provider.name
+        model_name = review_config.provider.effective_model
+        console.print(f"[dim]Using {provider_name} with {model_name}[/dim]\n")
+
+    return CodeReviewer(config=review_config), quiet, output_json
+
+
+def _handle_result(result: ReviewResult, output_json: bool) -> None:
+    """Handle review result output and exit code."""
+    if output_json:
+        _output_json(result)
+    else:
+        _output_report(result)
+
+    if result.has_critical_issues:
+        sys.exit(1)
+
+
+@click.group()
+def main():
     """Detective Benno - Code review detective powered by LLM.
 
     Investigate code changes to uncover bugs, security issues, and
     code smells before they become problems.
 
+    Commands:
+
+        benno FILES...            Review specific files/directories
+
+        benno --staged            Review staged git changes
+
+        benno --diff              Review diff from stdin
+
+        benno init                Create configuration file
+
+        benno version             Show version information
+
     Examples:
 
-        # Investigate specific files
         benno src/main.py src/utils.py
 
-        # Investigate staged git changes
-        benno --staged
+        benno --provider ollama --model codellama src/
 
-        # Investigate from diff
         git diff main..feature | benno --diff
-
-        # Use custom config
-        benno --config .benno.yaml src/
     """
-    if ctx.invoked_subcommand is not None:
-        return
+    pass
 
-    if not quiet and not output_json:
-        console.print(BANNER)
 
-    review_config = load_config(config)
-    review_config.level = level
-
-    reviewer = CodeReviewer(config=review_config)
+@main.command(name="investigate")
+@common_options
+@click.argument("files", nargs=-1, required=True, type=click.Path())
+def investigate_cmd(
+    files: tuple[str, ...],
+    config: str | None,
+    provider: str | None,
+    model: str | None,
+    level: str,
+    output_json: bool,
+    quiet: bool,
+) -> None:
+    """Investigate specific files or directories."""
+    reviewer, quiet, output_json = _setup_reviewer(config, provider, model, level, quiet, output_json)
 
     try:
-        if diff:
-            diff_content = sys.stdin.read()
-            result = reviewer.review_diff(diff_content)
-        elif staged:
-            result = _investigate_staged_changes(reviewer)
-        elif files:
-            result = _investigate_files(reviewer, list(files))
-        else:
-            click.echo(ctx.get_help())
-            return
+        result = _investigate_files(reviewer, list(files))
+        _handle_result(result, output_json)
+    except Exception as e:
+        console.print(f"[red]Investigation failed:[/red] {e}")
+        sys.exit(1)
 
-        if output_json:
-            _output_json(result)
-        else:
-            _output_report(result)
 
-        # Exit with error code if critical issues found
-        if result.has_critical_issues:
-            sys.exit(1)
+# Make "benno FILES" work directly (default command)
+@main.command(name="files", hidden=True)
+@common_options
+@click.argument("files", nargs=-1, required=True, type=click.Path())
+def files_cmd(
+    files: tuple[str, ...],
+    config: str | None,
+    provider: str | None,
+    model: str | None,
+    level: str,
+    output_json: bool,
+    quiet: bool,
+) -> None:
+    """Investigate specific files (hidden, same as investigate)."""
+    reviewer, quiet, output_json = _setup_reviewer(config, provider, model, level, quiet, output_json)
 
+    try:
+        result = _investigate_files(reviewer, list(files))
+        _handle_result(result, output_json)
+    except Exception as e:
+        console.print(f"[red]Investigation failed:[/red] {e}")
+        sys.exit(1)
+
+
+@main.command(name="staged")
+@common_options
+def staged_cmd(
+    config: str | None,
+    provider: str | None,
+    model: str | None,
+    level: str,
+    output_json: bool,
+    quiet: bool,
+) -> None:
+    """Investigate staged git changes."""
+    reviewer, quiet, output_json = _setup_reviewer(config, provider, model, level, quiet, output_json)
+
+    try:
+        result = _investigate_staged_changes(reviewer)
+        _handle_result(result, output_json)
+    except Exception as e:
+        console.print(f"[red]Investigation failed:[/red] {e}")
+        sys.exit(1)
+
+
+@main.command(name="diff")
+@common_options
+def diff_cmd(
+    config: str | None,
+    provider: str | None,
+    model: str | None,
+    level: str,
+    output_json: bool,
+    quiet: bool,
+) -> None:
+    """Investigate diff from stdin.
+
+    Example: git diff main..feature | benno diff
+    """
+    reviewer, quiet, output_json = _setup_reviewer(config, provider, model, level, quiet, output_json)
+
+    try:
+        diff_content = sys.stdin.read()
+        if not diff_content.strip():
+            console.print("[yellow]No diff content to investigate[/yellow]")
+            sys.exit(0)
+        result = reviewer.review_diff(diff_content)
+        _handle_result(result, output_json)
     except Exception as e:
         console.print(f"[red]Investigation failed:[/red] {e}")
         sys.exit(1)
@@ -141,24 +224,35 @@ def _investigate_files(reviewer: CodeReviewer, paths: list[str]) -> ReviewResult
     files = []
     for path in paths:
         p = Path(path)
+        if not p.exists():
+            console.print(f"[red]Path not found:[/red] {path}")
+            sys.exit(1)
+
         if p.is_file():
-            files.append(
-                FileChange(
-                    path=str(p),
-                    content=p.read_text(),
-                    language=reviewer._detect_language(str(p)),
+            try:
+                files.append(
+                    FileChange(
+                        path=str(p),
+                        content=p.read_text(),
+                        language=reviewer._detect_language(str(p)),
+                    )
                 )
-            )
+            except Exception as e:
+                console.print(f"[yellow]Skipping {path}:[/yellow] {e}")
         elif p.is_dir():
             for file in p.rglob("*"):
                 if file.is_file() and not _is_binary(file):
-                    files.append(
-                        FileChange(
-                            path=str(file),
-                            content=file.read_text(),
-                            language=reviewer._detect_language(str(file)),
+                    try:
+                        files.append(
+                            FileChange(
+                                path=str(file),
+                                content=file.read_text(),
+                                language=reviewer._detect_language(str(file)),
+                            )
                         )
-                    )
+                    except (OSError, UnicodeDecodeError):
+                        # Skip files that can't be read (binary, permissions, etc.)
+                        continue
 
     if not files:
         console.print("[yellow]No files to investigate[/yellow]")
@@ -203,7 +297,6 @@ def _output_report(result: ReviewResult) -> None:
         console.print("\n[green]Case closed - No issues found![/green]")
         return
 
-    # Group by severity
     severity_order = [Severity.CRITICAL, Severity.WARNING, Severity.SUGGESTION, Severity.INFO]
     severity_styles = {
         Severity.CRITICAL: ("red", "CRITICAL FINDINGS"),
@@ -241,7 +334,6 @@ def _output_report(result: ReviewResult) -> None:
                 )
                 console.print(Panel(syntax, title="Suggested fix", border_style="green"))
 
-    # Case status
     if result.has_critical_issues:
         console.print("\n[bold red]Case Status: REQUIRES IMMEDIATE ATTENTION[/bold red]")
     elif result.warning_count > 0:
@@ -253,9 +345,7 @@ def _output_report(result: ReviewResult) -> None:
 
 
 @main.command()
-@click.option(
-    "--global", "is_global", is_flag=True, help="Create global config"
-)
+@click.option("--global", "is_global", is_flag=True, help="Create global config")
 def init(is_global: bool) -> None:
     """Initialize configuration file."""
     config_content = """# Detective Benno Configuration
@@ -265,6 +355,21 @@ version: "1"
 investigation:
   level: standard          # minimal, standard, detailed
   max_findings: 10         # Maximum findings per investigation
+
+# Provider settings
+# Supported providers: openai, ollama
+provider:
+  name: openai             # openai or ollama
+  model: gpt-4o            # Model name (provider-specific)
+  # api_key: xxx           # Optional: falls back to OPENAI_API_KEY env var
+  # base_url: http://...   # Optional: for Ollama or custom endpoints
+  temperature: 0.3
+
+# Ollama example (uncomment to use):
+# provider:
+#   name: ollama
+#   model: codellama       # or: deepseek-coder, mistral, llama3
+#   base_url: http://localhost:11434
 
 # Custom investigation guidelines (add your own)
 guidelines:
@@ -280,12 +385,6 @@ ignore:
     - "*.txt"
     - "vendor/**"
     - "node_modules/**"
-
-# Model settings
-model:
-  provider: openai
-  name: gpt-4o
-  temperature: 0.3
 """
 
     if is_global:

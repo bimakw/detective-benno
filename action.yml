@@ -7,12 +7,29 @@ branding:
   color: 'blue'
 
 inputs:
+  # Provider configuration
+  provider:
+    description: 'LLM provider to use (openai, ollama)'
+    required: false
+    default: 'openai'
   openai_api_key:
-    description: 'OpenAI API key for powering the investigation'
-    required: true
+    description: 'OpenAI API key (required for openai provider)'
+    required: false
+  ollama_base_url:
+    description: 'Ollama API base URL (for ollama provider)'
+    required: false
+    default: 'http://localhost:11434'
+  model:
+    description: 'Model to use (provider-specific, e.g., gpt-4o, codellama)'
+    required: false
+    default: ''
+
+  # GitHub configuration
   github_token:
     description: 'GitHub token for posting review comments'
     required: true
+
+  # Investigation settings
   investigation_level:
     description: 'Level of investigation detail (minimal, standard, detailed)'
     required: false
@@ -21,14 +38,20 @@ inputs:
     description: 'Maximum number of findings to report'
     required: false
     default: '10'
-  model:
-    description: 'OpenAI model to use'
-    required: false
-    default: 'gpt-4o'
   config_file:
     description: 'Path to custom config file'
     required: false
     default: ''
+
+  # Output options
+  post_inline_comments:
+    description: 'Post inline review comments on the PR'
+    required: false
+    default: 'true'
+  post_summary_comment:
+    description: 'Post summary comment on the PR'
+    required: false
+    default: 'true'
   fail_on_critical:
     description: 'Fail the action if critical issues are found'
     required: false
@@ -37,10 +60,16 @@ inputs:
 outputs:
   findings_count:
     description: 'Total number of findings'
+    value: ${{ steps.investigate.outputs.findings_count }}
   critical_count:
     description: 'Number of critical findings'
+    value: ${{ steps.investigate.outputs.critical_count }}
   warning_count:
     description: 'Number of warnings'
+    value: ${{ steps.investigate.outputs.warning_count }}
+  report_json:
+    description: 'Path to the JSON report file'
+    value: 'investigation_report.json'
 
 runs:
   using: 'composite'
@@ -61,43 +90,128 @@ runs:
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           git fetch origin ${{ github.base_ref }} --depth=1
           echo "files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
         else
-          echo "files=$(git diff --name-only HEAD~1 | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          CHANGES=$(git diff --name-only HEAD~1 2>/dev/null | tr '\n' ' ')
+          if [ -n "$CHANGES" ]; then
+            echo "files=$CHANGES" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
         fi
 
     - name: Run Detective Benno Investigation
       id: investigate
+      if: steps.changed-files.outputs.has_changes == 'true'
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        OLLAMA_HOST: ${{ inputs.ollama_base_url }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
-        CONFIG_ARG=""
-        if [ -n "${{ inputs.config_file }}" ]; then
-          CONFIG_ARG="--config ${{ inputs.config_file }}"
+        # Build command arguments
+        ARGS=""
+
+        # Provider settings
+        if [ -n "${{ inputs.provider }}" ]; then
+          ARGS="$ARGS --provider ${{ inputs.provider }}"
         fi
 
-        benno ${{ steps.changed-files.outputs.files }} \
-          --level ${{ inputs.investigation_level }} \
-          --json $CONFIG_ARG > investigation_report.json 2>&1 || true
+        if [ -n "${{ inputs.model }}" ]; then
+          ARGS="$ARGS --model ${{ inputs.model }}"
+        fi
+
+        # Config file
+        if [ -n "${{ inputs.config_file }}" ] && [ -f "${{ inputs.config_file }}" ]; then
+          ARGS="$ARGS --config ${{ inputs.config_file }}"
+        fi
+
+        # Level
+        ARGS="$ARGS --level ${{ inputs.investigation_level }}"
+
+        # Run investigation
+        echo "Running: benno investigate --json $ARGS ${{ steps.changed-files.outputs.files }}"
+        benno investigate --json $ARGS ${{ steps.changed-files.outputs.files }} > investigation_report.json 2>&1 || true
 
         # Parse results
-        FINDINGS=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(len(d.get('comments', [])))" 2>/dev/null || echo "0")
-        CRITICAL=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'critical'))" 2>/dev/null || echo "0")
-        WARNINGS=$(cat investigation_report.json | python -c "import sys, json; d=json.load(sys.stdin); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'warning'))" 2>/dev/null || echo "0")
+        if [ -f investigation_report.json ]; then
+          FINDINGS=$(python3 -c "import sys, json; d=json.load(open('investigation_report.json')); print(len(d.get('comments', [])))" 2>/dev/null || echo "0")
+          CRITICAL=$(python3 -c "import sys, json; d=json.load(open('investigation_report.json')); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'critical'))" 2>/dev/null || echo "0")
+          WARNINGS=$(python3 -c "import sys, json; d=json.load(open('investigation_report.json')); print(sum(1 for c in d.get('comments', []) if c.get('severity') == 'warning'))" 2>/dev/null || echo "0")
+        else
+          FINDINGS=0
+          CRITICAL=0
+          WARNINGS=0
+        fi
 
         echo "findings_count=$FINDINGS" >> $GITHUB_OUTPUT
         echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
         echo "warning_count=$WARNINGS" >> $GITHUB_OUTPUT
 
-    - name: Post PR Comment
-      if: github.event_name == 'pull_request'
+        echo "Investigation complete: $FINDINGS findings ($CRITICAL critical, $WARNINGS warnings)"
+
+    - name: Post Inline Review Comments
+      if: github.event_name == 'pull_request' && inputs.post_inline_comments == 'true' && steps.changed-files.outputs.has_changes == 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
         if [ -f investigation_report.json ]; then
-          python << 'EOF'
+          python3 << 'EOF'
+        import json
+        import os
+        import sys
+
+        # Only import if needed
+        try:
+            from detective_benno.github import InlineReviewer
+            from detective_benno.models import ReviewResult
+        except ImportError:
+            print("InlineReviewer not available, skipping inline comments")
+            sys.exit(0)
+
+        with open('investigation_report.json') as f:
+            data = json.load(f)
+
+        result = ReviewResult(**data)
+
+        if not result.comments:
+            print("No findings to post")
+            sys.exit(0)
+
+        # Get PR info from environment
+        repo = os.environ.get('GITHUB_REPOSITORY')
+        ref = os.environ.get('GITHUB_REF', '')
+
+        # Extract PR number from refs/pull/123/merge
+        if '/pull/' in ref:
+            pr_number = int(ref.split('/pull/')[1].split('/')[0])
+        else:
+            print("Not a PR context, skipping inline comments")
+            sys.exit(0)
+
+        # Get commit SHA
+        sha = os.environ.get('GITHUB_SHA')
+
+        try:
+            reviewer = InlineReviewer(repo=repo)
+            reviewer.post_review(pr_number, result, commit_sha=sha)
+            print(f"Posted inline review with {len(result.comments)} comments")
+        except Exception as e:
+            print(f"Failed to post inline review: {e}")
+            # Don't fail the action, fall back to summary comment
+        EOF
+        fi
+
+    - name: Post Summary Comment
+      if: github.event_name == 'pull_request' && inputs.post_summary_comment == 'true' && steps.changed-files.outputs.has_changes == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        if [ -f investigation_report.json ]; then
+          python3 << 'EOF'
         import json
         import os
         import subprocess
@@ -106,39 +220,59 @@ runs:
             report = json.load(f)
 
         comments = report.get('comments', [])
+        files_reviewed = report.get('files_reviewed', 0)
+        model_used = report.get('model_used', 'unknown')
+
         if not comments:
-            body = "## Detective Benno Investigation Report\n\nCase closed - No issues found!"
+            body = """## :mag: Detective Benno Investigation Report
+
+:white_check_mark: **Case closed - No issues found!**
+
+_Files investigated: {files_reviewed} | Model: {model_used}_
+""".format(files_reviewed=files_reviewed, model_used=model_used)
         else:
             critical = sum(1 for c in comments if c.get('severity') == 'critical')
             warnings = sum(1 for c in comments if c.get('severity') == 'warning')
             suggestions = sum(1 for c in comments if c.get('severity') == 'suggestion')
 
-            body = f"""## Detective Benno Investigation Report
+            status = ":rotating_light: **REQUIRES ATTENTION**" if critical > 0 else (":warning: **Review Recommended**" if warnings > 0 else ":white_check_mark: **Looking Good**")
 
-        **Files Investigated:** {report.get('files_reviewed', 0)}
-        **Findings:** {len(comments)} ({critical} critical, {warnings} warnings, {suggestions} suggestions)
+            body = f"""## :mag: Detective Benno Investigation Report
 
-        """
+**Files Investigated:** {files_reviewed}
+**Findings:** {len(comments)} ({critical} critical, {warnings} warnings, {suggestions} suggestions)
+
+{status}
+
+"""
+            severity_icons = {'critical': ':rotating_light:', 'warning': ':warning:', 'suggestion': ':bulb:', 'info': ':information_source:'}
+
             for c in comments[:10]:
-                severity_icon = {'critical': '🚨', 'warning': '⚠️', 'suggestion': '💡'}.get(c['severity'], 'ℹ️')
-                body += f"\n### {severity_icon} {c['file_path']}:{c.get('line_start', '?')}\n"
+                icon = severity_icons.get(c['severity'], ':information_source:')
+                body += f"\n### {icon} `{c['file_path']}:{c.get('line_start', '?')}`\n"
                 body += f"**{c['severity'].upper()}** ({c.get('category', 'general')})\n\n"
-                body += f"{c['message']}\n"
+                body += f"> {c['message']}\n"
                 if c.get('suggestion'):
-                    body += f"\n**Recommendation:** {c['suggestion']}\n"
+                    body += f"\n*Recommendation:* {c['suggestion']}\n"
+
+            if len(comments) > 10:
+                body += f"\n\n_...and {len(comments) - 10} more findings_\n"
+
+            body += f"\n---\n_Model: {model_used}_"
 
         # Post comment using gh cli
-        pr_number = os.environ.get('GITHUB_REF', '').split('/')[-2]
-        subprocess.run(['gh', 'pr', 'comment', pr_number, '--body', body], check=True)
+        ref = os.environ.get('GITHUB_REF', '')
+        if '/pull/' in ref:
+            pr_number = ref.split('/pull/')[1].split('/')[0]
+            subprocess.run(['gh', 'pr', 'comment', pr_number, '--body', body], check=True)
+            print(f"Posted summary comment on PR #{pr_number}")
         EOF
         fi
 
     - name: Check for critical issues
-      if: inputs.fail_on_critical == 'true'
+      if: inputs.fail_on_critical == 'true' && steps.investigate.outputs.critical_count != '0'
       shell: bash
       run: |
         CRITICAL=${{ steps.investigate.outputs.critical_count }}
-        if [ "$CRITICAL" -gt 0 ]; then
-          echo "::error::Detective Benno found $CRITICAL critical issue(s)"
-          exit 1
-        fi
+        echo "::error::Detective Benno found $CRITICAL critical issue(s)"
+        exit 1

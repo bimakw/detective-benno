@@ -1,36 +1,50 @@
 """Core investigation engine for Detective Benno."""
 
-import json
 from pathlib import Path
-
-from openai import OpenAI
 
 from detective_benno.models import (
     FileChange,
     ReviewComment,
     ReviewConfig,
     ReviewResult,
-    Severity,
 )
 from detective_benno.prompts import build_review_prompt
+from detective_benno.providers.base import LLMProvider
+from detective_benno.providers.factory import ProviderFactory
 
 
 class CodeReviewer:
-    """AI-powered code investigator using OpenAI."""
+    """AI-powered code investigator with multi-provider support.
+
+    Supports multiple LLM providers including OpenAI and Ollama.
+    """
 
     def __init__(
         self,
-        api_key: str | None = None,
         config: ReviewConfig | None = None,
+        provider: LLMProvider | None = None,
     ) -> None:
         """Initialize the code investigator.
 
         Args:
-            api_key: OpenAI API key. If not provided, uses OPENAI_API_KEY env var.
             config: Investigation configuration. Uses defaults if not provided.
+            provider: LLM provider instance. If not provided, creates one from config.
         """
-        self.client = OpenAI(api_key=api_key)
         self.config = config or ReviewConfig()
+        self._provider = provider
+
+    @property
+    def provider(self) -> LLMProvider:
+        """Get the LLM provider, creating one if needed."""
+        if self._provider is None:
+            provider_config = self.config.provider
+            self._provider = ProviderFactory.create(
+                provider_name=provider_config.name,
+                api_key=provider_config.api_key,
+                model=provider_config.model,
+                base_url=provider_config.base_url,
+            )
+        return self._provider
 
     def review_files(self, files: list[FileChange]) -> ReviewResult:
         """Investigate multiple files and return aggregated results.
@@ -43,6 +57,7 @@ class CodeReviewer:
         """
         all_comments: list[ReviewComment] = []
         total_tokens = 0
+        files_reviewed = 0
 
         for file in files:
             if self._should_ignore_file(file.path):
@@ -51,11 +66,12 @@ class CodeReviewer:
             result = self._review_single_file(file)
             all_comments.extend(result.comments)
             total_tokens += result.tokens_used
+            files_reviewed += 1
 
         return ReviewResult(
-            files_reviewed=len(files),
+            files_reviewed=files_reviewed,
             comments=all_comments[: self.config.max_comments],
-            model_used=self.config.model,
+            model_used=self.config.provider.effective_model,
             tokens_used=total_tokens,
         )
 
@@ -93,41 +109,24 @@ class CodeReviewer:
 
     def _review_single_file(self, file: FileChange) -> ReviewResult:
         """Investigate a single file change."""
-        prompt = build_review_prompt(
+        user_prompt = build_review_prompt(
             file=file,
             config=self.config,
         )
+        system_prompt = self._get_system_prompt()
 
-        response = self.client.chat.completions.create(
-            model=self.config.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": self._get_system_prompt(),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            temperature=self.config.temperature,
-            response_format={"type": "json_object"},
+        comments, tokens_used = self.provider.review(
+            file=file,
+            config=self.config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
         )
-
-        tokens_used = response.usage.total_tokens if response.usage else 0
-        content = response.choices[0].message.content or "{}"
-
-        try:
-            data = json.loads(content)
-            comments = self._parse_review_response(data, file.path)
-        except json.JSONDecodeError:
-            comments = []
 
         return ReviewResult(
             files_reviewed=1,
             comments=comments,
             tokens_used=tokens_used,
-            model_used=self.config.model,
+            model_used=self.config.provider.effective_model,
         )
 
     def _get_system_prompt(self) -> str:
@@ -158,28 +157,6 @@ Be thorough but fair. Only report real issues, not minor style preferences unles
 
         return base_prompt
 
-    def _parse_review_response(
-        self, data: dict, file_path: str
-    ) -> list[ReviewComment]:
-        """Parse the AI response into ReviewComment objects."""
-        comments = []
-        for item in data.get("comments", []):
-            try:
-                comment = ReviewComment(
-                    file_path=file_path,
-                    line_start=item.get("line_start", 1),
-                    line_end=item.get("line_end"),
-                    severity=Severity(item.get("severity", "suggestion")),
-                    category=item.get("category", "best-practice"),
-                    message=item.get("message", ""),
-                    suggestion=item.get("suggestion"),
-                    suggested_code=item.get("suggested_code"),
-                )
-                comments.append(comment)
-            except (ValueError, KeyError):
-                continue
-        return comments
-
     def _should_ignore_file(self, path: str) -> bool:
         """Check if a file should be ignored."""
         from fnmatch import fnmatch
@@ -193,7 +170,7 @@ Be thorough but fair. Only report real issues, not minor style preferences unles
         """Parse a git diff into FileChange objects."""
         files = []
         current_file = None
-        current_diff_lines = []
+        current_diff_lines: list[str] = []
 
         for line in diff.split("\n"):
             if line.startswith("diff --git"):

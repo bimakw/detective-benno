@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from detective_benno.models import ReviewConfig
+from detective_benno.models import ProviderConfig, ReviewConfig
 
 
 def load_config(config_path: str | None = None) -> ReviewConfig:
@@ -56,7 +56,25 @@ def _load_from_file(path: str) -> ReviewConfig:
     # Extract nested config values
     investigation = data.get("investigation", data.get("review", {}))
     model_config = data.get("model", {})
+    provider_config = data.get("provider", {})
     ignore = data.get("ignore", {})
+
+    # Build provider config - support both new and legacy formats
+    # New format: provider.name, provider.model, provider.api_key
+    # Legacy format: model.provider, model.name
+    provider_name = provider_config.get("name") or model_config.get("provider", "openai")
+    provider_model = provider_config.get("model") or model_config.get("name")
+    provider_api_key = provider_config.get("api_key")
+    provider_base_url = provider_config.get("base_url")
+    provider_temperature = provider_config.get("temperature", model_config.get("temperature", 0.3))
+
+    provider = ProviderConfig(
+        name=provider_name,
+        model=provider_model,
+        api_key=provider_api_key,
+        base_url=provider_base_url,
+        temperature=provider_temperature,
+    )
 
     return ReviewConfig(
         level=investigation.get("level", "standard"),
@@ -64,6 +82,8 @@ def _load_from_file(path: str) -> ReviewConfig:
         guidelines=data.get("guidelines", []),
         ignore_files=ignore.get("files", []),
         ignore_patterns=ignore.get("patterns", []),
-        model=model_config.get("name", "gpt-4o"),
-        temperature=model_config.get("temperature", 0.3),
+        provider=provider,
+        # Keep legacy fields for backward compatibility
+        model=provider.effective_model,
+        temperature=provider.temperature,
     )
