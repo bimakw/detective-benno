@@ -1,4 +1,8 @@
-# Detective Benno
+<p align="center">
+  <img src="logo.svg" alt="Detective Benno Logo" width="120" height="120">
+</p>
+
+<h1 align="center">Detective Benno</h1>
 
 [![Python Version](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
