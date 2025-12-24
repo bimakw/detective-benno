@@ -169,6 +169,20 @@ def ollama_config() -> ReviewConfig:
     )
 
 
+@pytest.fixture
+def anthropic_config() -> ReviewConfig:
+    """ReviewConfig with Anthropic provider."""
+    return ReviewConfig(
+        level="standard",
+        max_comments=10,
+        provider=ProviderConfig(
+            name="anthropic",
+            model="claude-sonnet-4-20250514",
+            api_key="test-api-key",
+        ),
+    )
+
+
 # =============================================================================
 # Mock Client Fixtures
 # =============================================================================
@@ -208,6 +222,28 @@ def mock_ollama_response(mock_review_response_critical: dict[str, Any]) -> dict[
         "eval_count": 300,
         "prompt_eval_count": 200,
     }
+
+
+@pytest.fixture
+def mock_anthropic_client(mock_review_response_critical: dict[str, Any]) -> MagicMock:
+    """Mock Anthropic client with realistic response."""
+    mock_client = MagicMock()
+
+    # Mock response structure for Anthropic
+    mock_content_block = MagicMock()
+    mock_content_block.text = json.dumps(mock_review_response_critical)
+
+    mock_usage = MagicMock()
+    mock_usage.input_tokens = 200
+    mock_usage.output_tokens = 300
+
+    mock_response = MagicMock()
+    mock_response.content = [mock_content_block]
+    mock_response.usage = mock_usage
+
+    mock_client.messages.create.return_value = mock_response
+
+    return mock_client
 
 
 # =============================================================================

@@ -17,12 +17,14 @@ class ProviderFactory:
     def _ensure_registered(cls) -> None:
         """Ensure default providers are registered."""
         if not cls._providers:
+            from detective_benno.providers.anthropic import AnthropicProvider
             from detective_benno.providers.ollama import OllamaProvider
             from detective_benno.providers.openai import OpenAIProvider
 
             cls._providers = {
                 "openai": OpenAIProvider,
                 "ollama": OllamaProvider,
+                "anthropic": AnthropicProvider,
             }
 
     @classmethod
