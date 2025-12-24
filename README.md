@@ -6,6 +6,7 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D4A574?style=flat&logo=anthropic&logoColor=white)](https://anthropic.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Models-000000?style=flat&logo=llama&logoColor=white)](https://ollama.ai/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
@@ -17,7 +18,7 @@ An intelligent code review detective powered by LLM that investigates your pull 
 
 ## Features
 
-- **Multi-LLM Provider Support** - Use OpenAI or local models via Ollama (codellama, deepseek-coder, mistral)
+- **Multi-LLM Provider Support** - Use OpenAI, Anthropic Claude, or local models via Ollama (codellama, deepseek-coder, mistral)
 - **Automated PR Investigation** - Automatically triggered on pull request events
 - **Inline PR Comments** - Posts findings directly on relevant code lines
 - **Multi-language Support** - Investigates Python, Go, JavaScript, TypeScript, Rust, and more
@@ -62,6 +63,15 @@ benno init
 ```bash
 export OPENAI_API_KEY=your-api-key
 benno investigate src/main.py
+```
+
+#### Anthropic Claude
+```bash
+export ANTHROPIC_API_KEY=your-api-key
+benno investigate --provider anthropic src/main.py
+
+# Use specific Claude model
+benno investigate --provider anthropic --model claude-sonnet-4-20250514 src/main.py
 ```
 
 #### Ollama (Local Models - Free!)
@@ -138,8 +148,8 @@ version: "1"
 
 # Provider settings
 provider:
-  name: openai         # openai or ollama
-  model: gpt-4o        # gpt-4o, gpt-4o-mini, codellama, mistral, etc.
+  name: openai         # openai, anthropic, or ollama
+  model: gpt-4o        # gpt-4o, claude-sonnet-4-20250514, codellama, etc.
   base_url: null       # For Ollama: http://localhost:11434
 
 # Investigation settings
@@ -225,6 +235,7 @@ Case Status: REQUIRES ATTENTION
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | For OpenAI | Your OpenAI API key |
+| `ANTHROPIC_API_KEY` | For Anthropic | Your Anthropic API key |
 | `OLLAMA_HOST` | No | Ollama server URL (default: http://localhost:11434) |
 | `GITHUB_TOKEN` | For PR investigations | GitHub token with PR write access |
 | `BENNO_CONFIG` | No | Path to custom config file |
@@ -269,6 +280,7 @@ detective-benno/
 │   ├── providers/            # LLM providers
 │   │   ├── base.py           # Abstract provider
 │   │   ├── openai.py         # OpenAI implementation
+│   │   ├── anthropic.py      # Anthropic Claude implementation
 │   │   ├── ollama.py         # Ollama implementation
 │   │   └── factory.py        # Provider factory
 │   └── github/               # GitHub integration
@@ -300,6 +312,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Acknowledgments
 
 - OpenAI for GPT-4 API
+- Anthropic for Claude API
 - Ollama for local LLM support
 - GitHub Actions for CI/CD integration
 - The open source community
