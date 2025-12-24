@@ -95,7 +95,9 @@ class AnthropicProvider(LLMProvider):
         # Extract content from response
         content = ""
         if response.content and len(response.content) > 0:
-            content = response.content[0].text or "{}"
+            first_block = response.content[0]
+            if hasattr(first_block, "text"):
+                content = first_block.text or "{}"
 
         try:
             data = json.loads(content)
