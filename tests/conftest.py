@@ -183,6 +183,20 @@ def anthropic_config() -> ReviewConfig:
     )
 
 
+@pytest.fixture
+def groq_config() -> ReviewConfig:
+    """ReviewConfig with Groq provider."""
+    return ReviewConfig(
+        level="standard",
+        max_comments=10,
+        provider=ProviderConfig(
+            name="groq",
+            model="llama-3.3-70b-versatile",
+            api_key="test-api-key",
+        ),
+    )
+
+
 # =============================================================================
 # Mock Client Fixtures
 # =============================================================================
@@ -242,6 +256,30 @@ def mock_anthropic_client(mock_review_response_critical: dict[str, Any]) -> Magi
     mock_response.usage = mock_usage
 
     mock_client.messages.create.return_value = mock_response
+
+    return mock_client
+
+
+@pytest.fixture
+def mock_groq_client(mock_review_response_critical: dict[str, Any]) -> MagicMock:
+    """Mock Groq client with realistic response."""
+    mock_client = MagicMock()
+
+    # Mock response structure (similar to OpenAI)
+    mock_message = MagicMock()
+    mock_message.content = json.dumps(mock_review_response_critical)
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
+    mock_usage = MagicMock()
+    mock_usage.total_tokens = 500
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.usage = mock_usage
+
+    mock_client.chat.completions.create.return_value = mock_response
 
     return mock_client
 

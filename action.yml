@@ -9,18 +9,24 @@ branding:
 inputs:
   # Provider configuration
   provider:
-    description: 'LLM provider to use (openai, ollama)'
+    description: 'LLM provider to use (openai, anthropic, groq, ollama)'
     required: false
     default: 'openai'
   openai_api_key:
     description: 'OpenAI API key (required for openai provider)'
+    required: false
+  anthropic_api_key:
+    description: 'Anthropic API key (required for anthropic provider)'
+    required: false
+  groq_api_key:
+    description: 'Groq API key (required for groq provider)'
     required: false
   ollama_base_url:
     description: 'Ollama API base URL (for ollama provider)'
     required: false
     default: 'http://localhost:11434'
   model:
-    description: 'Model to use (provider-specific, e.g., gpt-4o, codellama)'
+    description: 'Model to use (provider-specific, e.g., gpt-4o, claude-sonnet-4-20250514, llama-3.3-70b-versatile, codellama)'
     required: false
     default: ''
 
@@ -107,6 +113,8 @@ runs:
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        GROQ_API_KEY: ${{ inputs.groq_api_key }}
         OLLAMA_HOST: ${{ inputs.ollama_base_url }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |

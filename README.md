@@ -7,6 +7,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 [![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D4A574?style=flat&logo=anthropic&logoColor=white)](https://anthropic.com/)
+[![Groq](https://img.shields.io/badge/Groq-LPU--Inference-F55036?style=flat&logo=groq&logoColor=white)](https://groq.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Models-000000?style=flat&logo=llama&logoColor=white)](https://ollama.ai/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?style=flat&logo=github-actions&logoColor=white)](https://github.com/features/actions)
@@ -18,7 +19,7 @@ An intelligent code review detective powered by LLM that investigates your pull 
 
 ## Features
 
-- **Multi-LLM Provider Support** - Use OpenAI, Anthropic Claude, or local models via Ollama (codellama, deepseek-coder, mistral)
+- **Multi-LLM Provider Support** - Use OpenAI, Anthropic Claude, Groq, or local models via Ollama (codellama, deepseek-coder, mistral)
 - **Automated PR Investigation** - Automatically triggered on pull request events
 - **Inline PR Comments** - Posts findings directly on relevant code lines
 - **Multi-language Support** - Investigates Python, Go, JavaScript, TypeScript, Rust, and more
@@ -72,6 +73,16 @@ benno investigate --provider anthropic src/main.py
 
 # Use specific Claude model
 benno investigate --provider anthropic --model claude-sonnet-4-20250514 src/main.py
+```
+
+#### Groq (Fast Inference)
+```bash
+export GROQ_API_KEY=your-api-key
+benno investigate --provider groq src/main.py
+
+# Use specific Groq model
+benno investigate --provider groq --model llama-3.3-70b-versatile src/main.py
+benno investigate --provider groq --model mixtral-8x7b-32768 src/main.py
 ```
 
 #### Ollama (Local Models - Free!)
@@ -148,8 +159,8 @@ version: "1"
 
 # Provider settings
 provider:
-  name: openai         # openai, anthropic, or ollama
-  model: gpt-4o        # gpt-4o, claude-sonnet-4-20250514, codellama, etc.
+  name: openai         # openai, anthropic, groq, or ollama
+  model: gpt-4o        # gpt-4o, claude-sonnet-4-20250514, llama-3.3-70b-versatile, codellama, etc.
   base_url: null       # For Ollama: http://localhost:11434
 
 # Investigation settings
@@ -236,6 +247,7 @@ Case Status: REQUIRES ATTENTION
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | For OpenAI | Your OpenAI API key |
 | `ANTHROPIC_API_KEY` | For Anthropic | Your Anthropic API key |
+| `GROQ_API_KEY` | For Groq | Your Groq API key |
 | `OLLAMA_HOST` | No | Ollama server URL (default: http://localhost:11434) |
 | `GITHUB_TOKEN` | For PR investigations | GitHub token with PR write access |
 | `BENNO_CONFIG` | No | Path to custom config file |
@@ -281,6 +293,7 @@ detective-benno/
 │   │   ├── base.py           # Abstract provider
 │   │   ├── openai.py         # OpenAI implementation
 │   │   ├── anthropic.py      # Anthropic Claude implementation
+│   │   ├── groq.py           # Groq implementation
 │   │   ├── ollama.py         # Ollama implementation
 │   │   └── factory.py        # Provider factory
 │   └── github/               # GitHub integration
@@ -313,6 +326,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 - OpenAI for GPT-4 API
 - Anthropic for Claude API
+- Groq for fast LPU inference
 - Ollama for local LLM support
 - GitHub Actions for CI/CD integration
 - The open source community

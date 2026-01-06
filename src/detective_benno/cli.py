@@ -30,7 +30,7 @@ BANNER = r"""
 def common_options(f):
     """Decorator for common review options."""
     f = click.option("--config", "-c", type=click.Path(exists=True), help="Path to config file")(f)
-    f = click.option("--provider", "-p", type=click.Choice(["openai", "ollama"]),
+    f = click.option("--provider", "-p", type=click.Choice(["openai", "ollama", "anthropic", "groq"]),
                      help="LLM provider to use (overrides config)")(f)
     f = click.option("--model", "-m", help="Model to use (e.g., gpt-4o, codellama)")(f)
     f = click.option("--level", type=click.Choice(["minimal", "standard", "detailed"]),
