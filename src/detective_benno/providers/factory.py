@@ -18,6 +18,7 @@ class ProviderFactory:
         """Ensure default providers are registered."""
         if not cls._providers:
             from detective_benno.providers.anthropic import AnthropicProvider
+            from detective_benno.providers.gemini import GeminiProvider
             from detective_benno.providers.groq import GroqProvider
             from detective_benno.providers.ollama import OllamaProvider
             from detective_benno.providers.openai import OpenAIProvider
@@ -27,6 +28,7 @@ class ProviderFactory:
                 "ollama": OllamaProvider,
                 "anthropic": AnthropicProvider,
                 "groq": GroqProvider,
+                "gemini": GeminiProvider,
             }
 
     @classmethod
