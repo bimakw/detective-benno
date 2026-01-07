@@ -7,6 +7,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991?style=flat&logo=openai&logoColor=white)](https://openai.com/)
 [![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D4A574?style=flat&logo=anthropic&logoColor=white)](https://anthropic.com/)
+[![Google Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Groq](https://img.shields.io/badge/Groq-LPU--Inference-F55036?style=flat&logo=groq&logoColor=white)](https://groq.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Models-000000?style=flat&logo=llama&logoColor=white)](https://ollama.ai/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -19,7 +20,7 @@ An intelligent code review detective powered by LLM that investigates your pull 
 
 ## Features
 
-- **Multi-LLM Provider Support** - Use OpenAI, Anthropic Claude, Groq, or local models via Ollama (codellama, deepseek-coder, mistral)
+- **Multi-LLM Provider Support** - Use OpenAI, Anthropic Claude, Google Gemini, Groq, or local models via Ollama (codellama, deepseek-coder, mistral)
 - **Automated PR Investigation** - Automatically triggered on pull request events
 - **Inline PR Comments** - Posts findings directly on relevant code lines
 - **Multi-language Support** - Investigates Python, Go, JavaScript, TypeScript, Rust, and more
@@ -73,6 +74,17 @@ benno investigate --provider anthropic src/main.py
 
 # Use specific Claude model
 benno investigate --provider anthropic --model claude-sonnet-4-20250514 src/main.py
+```
+
+#### Google Gemini
+```bash
+export GOOGLE_API_KEY=your-api-key
+benno investigate --provider gemini src/main.py
+
+# Use specific Gemini model
+benno investigate --provider gemini --model gemini-2.0-flash-exp src/main.py
+benno investigate --provider gemini --model gemini-1.5-pro src/main.py
+benno investigate --provider gemini --model gemini-1.5-flash src/main.py
 ```
 
 #### Groq (Fast Inference)
@@ -159,8 +171,8 @@ version: "1"
 
 # Provider settings
 provider:
-  name: openai         # openai, anthropic, groq, or ollama
-  model: gpt-4o        # gpt-4o, claude-sonnet-4-20250514, llama-3.3-70b-versatile, codellama, etc.
+  name: openai         # openai, anthropic, gemini, groq, or ollama
+  model: gpt-4o        # gpt-4o, claude-sonnet-4-20250514, gemini-2.0-flash-exp, llama-3.3-70b-versatile, codellama, etc.
   base_url: null       # For Ollama: http://localhost:11434
 
 # Investigation settings
@@ -247,6 +259,7 @@ Case Status: REQUIRES ATTENTION
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | For OpenAI | Your OpenAI API key |
 | `ANTHROPIC_API_KEY` | For Anthropic | Your Anthropic API key |
+| `GOOGLE_API_KEY` | For Gemini | Your Google AI API key |
 | `GROQ_API_KEY` | For Groq | Your Groq API key |
 | `OLLAMA_HOST` | No | Ollama server URL (default: http://localhost:11434) |
 | `GITHUB_TOKEN` | For PR investigations | GitHub token with PR write access |
@@ -293,6 +306,7 @@ detective-benno/
 │   │   ├── base.py           # Abstract provider
 │   │   ├── openai.py         # OpenAI implementation
 │   │   ├── anthropic.py      # Anthropic Claude implementation
+│   │   ├── gemini.py         # Google Gemini implementation
 │   │   ├── groq.py           # Groq implementation
 │   │   ├── ollama.py         # Ollama implementation
 │   │   └── factory.py        # Provider factory
@@ -326,6 +340,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 - OpenAI for GPT-4 API
 - Anthropic for Claude API
+- Google for Gemini API
 - Groq for fast LPU inference
 - Ollama for local LLM support
 - GitHub Actions for CI/CD integration

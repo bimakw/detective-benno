@@ -197,6 +197,20 @@ def groq_config() -> ReviewConfig:
     )
 
 
+@pytest.fixture
+def gemini_config() -> ReviewConfig:
+    """ReviewConfig with Gemini provider."""
+    return ReviewConfig(
+        level="standard",
+        max_comments=10,
+        provider=ProviderConfig(
+            name="gemini",
+            model="gemini-2.0-flash-exp",
+            api_key="test-api-key",
+        ),
+    )
+
+
 # =============================================================================
 # Mock Client Fixtures
 # =============================================================================
@@ -282,6 +296,26 @@ def mock_groq_client(mock_review_response_critical: dict[str, Any]) -> MagicMock
     mock_client.chat.completions.create.return_value = mock_response
 
     return mock_client
+
+
+@pytest.fixture
+def mock_gemini_client(mock_review_response_critical: dict[str, Any]) -> MagicMock:
+    """Mock Gemini GenerativeModel with realistic response."""
+    mock_model = MagicMock()
+
+    # Mock usage metadata
+    mock_usage = MagicMock()
+    mock_usage.prompt_token_count = 200
+    mock_usage.candidates_token_count = 300
+
+    # Mock response
+    mock_response = MagicMock()
+    mock_response.text = json.dumps(mock_review_response_critical)
+    mock_response.usage_metadata = mock_usage
+
+    mock_model.generate_content.return_value = mock_response
+
+    return mock_model
 
 
 # =============================================================================
